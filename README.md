@@ -1,12 +1,9 @@
 # HalloChat（ImGui + C++ 客户端 / Node.js 服务端）
 
-一个“能跑起来”的轻量聊天示例：
-
 - **客户端**：C++ + **Dear ImGui** + GLFW + OpenGL（桌面 GUI）
 - **服务端**：Node.js + Express + ws（WebSocket）
-- **功能**：注册/登录（HTTP）→ 取好友列表（HTTP）→ WebSocket 鉴权 → 群聊/私聊消息
+- **已实现功能**：注册/登录（HTTP）→ 取好友列表（HTTP）→ WebSocket 鉴权 → 群聊/私聊消息
 
-> 目标：用最少依赖快速搭一个可用的聊天 Demo，便于你继续扩展 UI/协议/存储。
 
 ---
 
@@ -178,18 +175,8 @@ ImGui 默认字体不包含中文 glyph，会显示问号。
 - 先确保双方互加好友：`添加好友` 填对方 UID
 - 再点 `刷新好友`
 
----
 
-## 开发建议（下一步怎么做更像“真聊天”）
-
-- 把“消息列表/好友列表/当前会话”抽成结构化状态（view model）
-- 增加消息历史拉取（HTTP endpoint）
-- 增加离线/重连/重发机制
-- 把 storage 从 json 文件换成 SQLite/Postgres/Mongo
-
----
-
-## License
+## License 许可证声明
 
 本项目使用 **GNU LGPL v2.1（GNU Lesser General Public License, Version 2.1）**。
 
