@@ -39,12 +39,3 @@
 
 # debug information files
 *.dwo
-
-# Build outputs
-build/
-**/build/
-
-# Server data
-/服务端/group_chat.json
-/服务端/Account/**
-!/服务端/Account/.gitkeep

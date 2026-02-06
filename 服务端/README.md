@@ -26,8 +26,27 @@
 - `WebSocket /ws`
 
 ## Storage
-- Accounts stored in `data/users.json`
+- Accounts stored in `Account/<username>_<uid>/pak.JSON`
+- Friends stored in `Account/<username>_<uid>/<friendUid>.json`
+- Group chat stored in `group_chat.json`
 - Passwords are hashed (PBKDF2)
+
+## Monitor Website
+1. Open monitor project
+   ```bash
+   cd monitor
+   ```
+2. Install dependencies
+   ```bash
+   npm install
+   ```
+3. Run dev server
+   ```bash
+   npm run dev
+   ```
+4. Open the site in your browser
+   - Default monitor URL: `http://localhost:5173`
+   - Default server URL inside the page: `http://localhost:3001`
 
 ## WebSocket Protocol
 - Client -> Server

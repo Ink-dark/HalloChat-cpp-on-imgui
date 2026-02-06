@@ -17,7 +17,8 @@ HalloChat-cpp-on-imgui/
 │       └── src/main.cpp
 └── 服务端/
     ├── src/server.js        # Node.js 服务端（Express + ws）
-    ├── data/users.json      # 账号/好友数据（运行后生成）
+    ├── Account/             # 账号/好友/私聊数据（运行后生成）
+    ├── group_chat.json      # 群聊数据（运行后生成）
     ├── package.json
     └── monitor/             # 监控相关（可选）
 ```
@@ -93,7 +94,7 @@ npm run dev
 - HTTP API：`http://localhost:3001/api/...`
 - WebSocket：`ws://localhost:3001/ws`
 
-> 数据存储：账号写入 `服务端/data/users.json`。
+> 数据存储：账号写入 `服务端/Account/<username>_<uid>/pak.JSON`；好友/私聊写入 `服务端/Account/<username>_<uid>/<friendUid>.json`；群聊写入 `服务端/group_chat.json`。
 
 ### 密码安全说明
 
@@ -128,6 +129,22 @@ cd build
 3) 客户端会自动连接 WebSocket `/ws`，并发送 `{type:"auth", token}` 完成鉴权
 4) 点“刷新好友”拉取好友列表
 5) 选择“大群”或某个好友 → 发送群聊/私聊消息
+
+---
+
+## 3) 启动监控网站（可选）
+
+```bash
+cd "服务端/monitor"
+npm install
+npm run dev
+```
+
+默认访问地址：
+- 监控网页：`http://localhost:5173`
+- 页面内默认服务端地址：`http://localhost:3001`
+
+你可以在页面右上角修改服务端地址。
 
 ---
 
@@ -178,7 +195,7 @@ ImGui 默认字体不包含中文 glyph，会显示问号。
 
 ## License 许可证声明
 
-本项目使用 **GNU LGPL v2.1（GNU Lesser General Public License, Version 2.1）**。
+本项目使用 **GNU LGPL v3（GNU Lesser General Public License, Version 3）**。
 
 - 许可证全文：见仓库根目录 `LICENSE`
 

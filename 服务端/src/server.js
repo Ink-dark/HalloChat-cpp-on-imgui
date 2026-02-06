@@ -11,8 +11,9 @@ const PORT = Number(process.env.PORT || 3001);
 const WS_PATH = process.env.WS_PATH || '/ws';
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:5173';
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const ACCOUNT_DIR = path.join(__dirname, '..', 'Account');
+const PAK_FILENAME = 'pak.JSON';
+const GROUP_CHAT_FILE = path.join(__dirname, '..', 'group_chat.json');
 
 const app = express();
 app.use(express.json());
@@ -42,30 +43,154 @@ const onlineUsers = new Map();
 const loopDelay = monitorEventLoopDelay({ resolution: 20 });
 loopDelay.enable();
 
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+function ensureAccountDir() {
+  if (!fs.existsSync(ACCOUNT_DIR)) {
+    fs.mkdirSync(ACCOUNT_DIR, { recursive: true });
   }
 }
 
-function loadUsers() {
-  ensureDataDir();
-  if (!fs.existsSync(USERS_FILE)) {
-    return { users: [] };
-  }
+function writeJsonAtomic(filePath, data) {
+  const tmpFile = `${filePath}.tmp`;
+  fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2));
+  fs.renameSync(tmpFile, filePath);
+}
+
+function sanitizeDirPrefix(username) {
+  const sanitized = String(username).trim().replace(/[^a-zA-Z0-9_-]+/g, '_');
+  return sanitized.length ? sanitized.slice(0, 32) : 'user';
+}
+
+function readPakFile(dirPath) {
+  const pakPath = path.join(dirPath, PAK_FILENAME);
+  if (!fs.existsSync(pakPath)) return null;
   try {
-    const raw = fs.readFileSync(USERS_FILE, 'utf8');
+    const raw = fs.readFileSync(pakPath, 'utf8');
     return JSON.parse(raw);
   } catch (err) {
-    return { users: [] };
+    return null;
   }
 }
 
-function saveUsers(data) {
-  ensureDataDir();
-  const tmpFile = `${USERS_FILE}.tmp`;
-  fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2));
-  fs.renameSync(tmpFile, USERS_FILE);
+function listUserRecords() {
+  ensureAccountDir();
+  const entries = fs.readdirSync(ACCOUNT_DIR, { withFileTypes: true });
+  const records = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const dirPath = path.join(ACCOUNT_DIR, entry.name);
+    const pak = readPakFile(dirPath);
+    if (!pak || !pak.uid || !pak.username) continue;
+    records.push({ user: pak, dir: dirPath });
+  }
+  return records;
+}
+
+function findUserRecordByUsername(username) {
+  const records = listUserRecords();
+  return records.find((r) => r.user.username === username) || null;
+}
+
+function findUserRecordByUid(uid) {
+  const records = listUserRecords();
+  return records.find((r) => r.user.uid === uid) || null;
+}
+
+function createAccount(username, passwordHash, passwordSalt, uid) {
+  ensureAccountDir();
+  const dirPrefix = sanitizeDirPrefix(username);
+  const dirPath = path.join(ACCOUNT_DIR, `${dirPrefix}_${uid}`);
+  fs.mkdirSync(dirPath, { recursive: true });
+  const user = {
+    uid,
+    username,
+    passwordHash,
+    passwordSalt,
+    createdAt: Date.now()
+  };
+  writeJsonAtomic(path.join(dirPath, PAK_FILENAME), user);
+  return { user, dir: dirPath };
+}
+
+function listFriendFiles(dirPath) {
+  if (!fs.existsSync(dirPath)) return [];
+  return fs
+    .readdirSync(dirPath, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .filter((name) => {
+      if (!name.toLowerCase().endsWith('.json')) return false;
+      if (name.toLowerCase() === PAK_FILENAME.toLowerCase()) return false;
+      return true;
+    });
+}
+
+function readFriendFile(dirPath, friendUid) {
+  const filePath = path.join(dirPath, `${friendUid}.json`);
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    return JSON.parse(raw);
+  } catch (err) {
+    return null;
+  }
+}
+
+function upsertFriendFile(dirPath, friendUser) {
+  const filePath = path.join(dirPath, `${friendUser.uid}.json`);
+  const existing = readFriendFile(dirPath, friendUser.uid);
+  const payload = {
+    uid: friendUser.uid,
+    username: friendUser.username,
+    messages: Array.isArray(existing?.messages) ? existing.messages : []
+  };
+  writeJsonAtomic(filePath, payload);
+  return payload;
+}
+
+function listFriends(dirPath) {
+  const files = listFriendFiles(dirPath);
+  const friends = [];
+  for (const file of files) {
+    const filePath = path.join(dirPath, file);
+    try {
+      const raw = fs.readFileSync(filePath, 'utf8');
+      const data = JSON.parse(raw);
+      if (data && data.uid && data.username) {
+        friends.push({ uid: data.uid, username: data.username });
+      }
+    } catch (err) {
+      // ignore invalid files
+    }
+  }
+  return friends;
+}
+
+function appendPrivateMessage(fromRecord, toRecord, message) {
+  const fromFriend = upsertFriendFile(fromRecord.dir, toRecord.user);
+  const toFriend = upsertFriendFile(toRecord.dir, fromRecord.user);
+
+  fromFriend.messages.push(message);
+  toFriend.messages.push(message);
+
+  writeJsonAtomic(path.join(fromRecord.dir, `${toRecord.user.uid}.json`), fromFriend);
+  writeJsonAtomic(path.join(toRecord.dir, `${fromRecord.user.uid}.json`), toFriend);
+}
+
+function readGroupChat() {
+  if (!fs.existsSync(GROUP_CHAT_FILE)) return [];
+  try {
+    const raw = fs.readFileSync(GROUP_CHAT_FILE, 'utf8');
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function appendGroupMessage(message) {
+  const messages = readGroupChat();
+  messages.push(message);
+  writeJsonAtomic(GROUP_CHAT_FILE, messages);
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
@@ -107,13 +232,12 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
   const uid = sessions.get(token);
-  const usersData = loadUsers();
-  const user = usersData.users.find((u) => u.uid === uid);
-  if (!user) {
+  const record = findUserRecordByUid(uid);
+  if (!record) {
     return res.status(401).json({ success: false, message: 'User not found' });
   }
-  req.user = user;
-  req.usersData = usersData;
+  req.user = record.user;
+  req.userRecord = record;
   req.token = token;
   next();
 }
@@ -127,28 +251,19 @@ app.post('/api/auth/register', (req, res) => {
     return res.status(400).json({ success: false, message: 'Username >=3, password >=6' });
   }
 
-  const data = loadUsers();
-  if (data.users.some((u) => u.username === username)) {
+  const existing = findUserRecordByUsername(username);
+  if (existing) {
     return res.status(409).json({ success: false, message: 'Username already exists' });
   }
 
   const uid = crypto.randomUUID();
   const { salt, hash } = hashPassword(password);
-  const user = {
-    uid,
-    username,
-    passwordHash: hash,
-    passwordSalt: salt,
-    friends: [],
-    createdAt: Date.now()
-  };
-  data.users.push(user);
-  saveUsers(data);
+  const record = createAccount(username, hash, salt, uid);
 
   const token = crypto.randomBytes(24).toString('hex');
   sessions.set(token, uid);
 
-  res.json({ success: true, uid, username, token });
+  res.json({ success: true, uid, username: record.user.username, token });
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -157,20 +272,19 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(400).json({ success: false, message: 'Missing username or password' });
   }
 
-  const data = loadUsers();
-  const user = data.users.find((u) => u.username === username);
-  if (!user) {
+  const record = findUserRecordByUsername(username);
+  if (!record) {
     return res.status(401).json({ success: false, message: 'Invalid credentials' });
   }
 
-  if (!verifyPassword(password, user.passwordSalt, user.passwordHash)) {
+  if (!verifyPassword(password, record.user.passwordSalt, record.user.passwordHash)) {
     return res.status(401).json({ success: false, message: 'Invalid credentials' });
   }
 
   const token = crypto.randomBytes(24).toString('hex');
-  sessions.set(token, user.uid);
+  sessions.set(token, record.user.uid);
 
-  res.json({ success: true, uid: user.uid, username: user.username, token });
+  res.json({ success: true, uid: record.user.uid, username: record.user.username, token });
 });
 
 app.post('/api/friends/add', requireAuth, (req, res) => {
@@ -182,27 +296,21 @@ app.post('/api/friends/add', requireAuth, (req, res) => {
     return res.status(400).json({ success: false, message: 'Cannot add yourself' });
   }
 
-  const data = req.usersData;
-  const target = data.users.find((u) => u.uid === uid);
+  const target = findUserRecordByUid(uid);
   if (!target) {
     return res.status(404).json({ success: false, message: 'User not found' });
   }
 
-  const me = data.users.find((u) => u.uid === req.user.uid);
-  if (!me.friends.includes(uid)) me.friends.push(uid);
-  if (!target.friends.includes(me.uid)) target.friends.push(me.uid);
-  saveUsers(data);
+  const me = req.userRecord;
+  upsertFriendFile(me.dir, target.user);
+  upsertFriendFile(target.dir, me.user);
 
-  res.json({ success: true, friend: { uid: target.uid, username: target.username } });
+  res.json({ success: true, friend: { uid: target.user.uid, username: target.user.username } });
 });
 
 app.get('/api/friends/list', requireAuth, (req, res) => {
-  const data = req.usersData;
-  const me = data.users.find((u) => u.uid === req.user.uid);
-  const friends = me.friends
-    .map((uid) => data.users.find((u) => u.uid === uid))
-    .filter(Boolean)
-    .map((u) => ({ uid: u.uid, username: u.username }));
+  const me = req.userRecord;
+  const friends = listFriends(me.dir);
   res.json({ success: true, friends });
 });
 
@@ -237,24 +345,23 @@ wss.on('connection', (ws, req) => {
           return;
         }
 
-        const data = loadUsers();
-        const user = data.users.find((u) => u.uid === uid);
-        if (!user) {
+        const record = findUserRecordByUid(uid);
+        if (!record) {
           ws.send(JSON.stringify({ type: 'auth', success: false, message: 'User not found' }));
           ws.close();
           return;
         }
 
         ws.meta.authenticated = true;
-        ws.meta.id = user.uid;
-        ws.meta.name = user.username;
-        onlineUsers.set(user.uid, ws);
+        ws.meta.id = record.user.uid;
+        ws.meta.name = record.user.username;
+        onlineUsers.set(record.user.uid, ws);
 
-        ws.send(JSON.stringify({ type: 'auth', success: true, uid: user.uid, name: user.username }));
+        ws.send(JSON.stringify({ type: 'auth', success: true, uid: record.user.uid, name: record.user.username }));
         broadcast({
           type: 'system',
-          message: `${user.username} joined`,
-          uid: user.uid,
+          message: `${record.user.username} joined`,
+          uid: record.user.uid,
           ts: Date.now()
         });
         return;
@@ -282,6 +389,7 @@ wss.on('connection', (ws, req) => {
       pruneMessages();
 
       broadcast(message);
+      appendGroupMessage(message);
       return;
     }
 
@@ -309,6 +417,11 @@ wss.on('connection', (ws, req) => {
       }
 
       ws.send(JSON.stringify(message));
+      const fromRecord = findUserRecordByUid(ws.meta.id);
+      const toRecord = findUserRecordByUid(payload.toUid);
+      if (fromRecord && toRecord) {
+        appendPrivateMessage(fromRecord, toRecord, message);
+      }
       return;
     }
 
