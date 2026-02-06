@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HalloChat 服务器监控</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <div>
+          <p class="eyebrow">HalloChat Monitor</p>
+          <h1>服务端实时状态</h1>
+          <p class="subtitle">实时监测连接、吞吐、错误率与系统资源。</p>
+        </div>
+        <div class="controls">
+          <label class="field">
+            <span>服务端地址</span>
+            <input id="baseUrl" type="text" value="http://localhost:3001" />
+          </label>
+          <button id="applyUrl">应用</button>
+          <div class="status" id="healthStatus">检测中…</div>
+        </div>
+      </header>
+
+      <section class="grid" id="statsGrid"></section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>最近事件</h2>
+          <button id="clearLog">清空</button>
+        </div>
+        <div class="log" id="eventLog"></div>
+      </section>
+
+      <footer>
+        <span>自动刷新：2 秒</span>
+        <span id="lastUpdated">--</span>
+      </footer>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
