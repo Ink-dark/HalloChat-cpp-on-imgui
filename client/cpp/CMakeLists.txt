@@ -6,19 +6,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
 
-# ZLIB - 首先获取
+# 首先获取 ZLIB（ixwebsocket 需要这个依赖）
 FetchContent_Declare(
   zlib
   GIT_REPOSITORY https://github.com/madler/zlib.git
   GIT_TAG        v1.3.1
 )
 FetchContent_MakeAvailable(zlib)
-
-# 在 ixwebsocket 查找 ZLIB 之前设置相关变量
-set(ZLIB_FOUND TRUE)
-set(ZLIB_INCLUDE_DIRS ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR})
-set(ZLIB_LIBRARIES zlibstatic)
-set(ZLIB_VERSION_STRING "1.3.1")
 
 # GLFW
 FetchContent_Declare(
@@ -52,7 +46,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(cpphttplib)
 
-# ixwebsocket - 禁用其内部的 ZLIB 查找
+# ixwebsocket - 关键修改：禁用 ZLIB 支持
 FetchContent_Declare(
   ixwebsocket
   GIT_REPOSITORY https://github.com/machinezone/IXWebSocket.git
@@ -61,11 +55,47 @@ FetchContent_Declare(
 set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "" FORCE)
 set(IXWEBSOCKET_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(IXWEBSOCKET_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
+set(IXWEBSOCKET_USE_ZLIB OFF CACHE BOOL "" FORCE)  # 关键：禁用 ZLIB 支持
+FetchContent_MakeAvailable(ixwebsocket)
 
-# 关键修改：在配置 ixwebsocket 之前设置 ZLIB 变量
-FetchContent_GetProperties(ixwebsocket)
-if(NOT ixwebsocket_POPULATED)
-  FetchContent_Populate(ixwebsocket)
-  
-  # 修改 ixwebsocket 的 CMakeLists.txt 来使用我们的 ZLIB
-  file(READ ${ixwebs
+add_executable(hallochat-imgui
+  src/main.cpp
+)
+
+target_include_directories(hallochat-imgui PRIVATE
+  ${imgui_SOURCE_DIR}
+  ${imgui_SOURCE_DIR}/backends
+  ${cpphttplib_SOURCE_DIR}
+)
+
+target_link_libraries(hallochat-imgui PRIVATE
+  glfw
+  nlohmann_json::nlohmann_json
+  ixwebsocket
+)
+
+if (WIN32)
+  target_compile_definitions(hallochat-imgui PRIVATE -DWIN32)
+endif()
+
+# Build ImGui sources into a static lib
+file(GLOB IMGUI_SRC
+  ${imgui_SOURCE_DIR}/*.cpp
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+)
+
+add_library(imgui_lib STATIC ${IMGUI_SRC})
+target_include_directories(imgui_lib PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
+target_link_libraries(imgui_lib PUBLIC glfw)
+
+target_link_libraries(hallochat-imgui PRIVATE imgui_lib)
+
+# 修复：Windows 下应该是 OpenGL 而不是 opengl
+if (WIN32)
+  find_package(OpenGL REQUIRED)  # 修正：大写 OpenGL
+  target_link_libraries(hallochat-imgui PRIVATE OpenGL::GL)
+else()
+  find_package(OpenGL REQUIRED)
+  target_link_libraries(hallochat-imgui PRIVATE OpenGL::GL)
+endif()
