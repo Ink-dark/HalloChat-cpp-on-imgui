@@ -1,31 +1,28 @@
-name: CI — Build client (Windows & macOS)
+name: Build
 
-on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+on: [push, pull_request]
 
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [windows-latest, macos-latest]
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install CMake
-        uses: lukka/get-cmake@v3
         with:
-          cmake-version: '3.27.6'
+          submodules: recursive
+
+      - name: Set up CMake
+        uses: actions/setup-cmake@v3
+        with:
+          cmake-version: '3.29.3'
 
       - name: Configure (Windows)
         if: matrix.os == 'windows-latest'
-        run: cmake -S client/cpp -B build -DCMAKE_BUILD_TYPE=Release -A x64
+        run: cmake -S client/cpp -B build -A x64 -DCMAKE_BUILD_TYPE=Release
         shell: pwsh
 
       - name: Configure (macOS)
@@ -35,12 +32,12 @@ jobs:
 
       - name: Build (Windows)
         if: matrix.os == 'windows-latest'
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --config Release
         shell: pwsh
 
       - name: Build (macOS)
         if: matrix.os == 'macos-latest'
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --config Release -- -j$(sysctl -n hw.ncpu)
         shell: bash
 
       - name: Upload build artifacts
