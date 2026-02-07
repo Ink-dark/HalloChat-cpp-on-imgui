@@ -1,0 +1,19 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "default",
+      "hidden": true,
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
+      "cacheVariables": {
+        "CMAKE_MESSAGE_LOG_LEVEL": "VERBOSE"
+      }
+    }
+  ],
+  "vendor": {
+    "microsoft.com/VisualStudioSettings/CMake/1.0": {
+      "hostOS": ["Windows,macos"]
+    }
+  }
+}
