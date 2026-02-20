@@ -1,0 +1,12 @@
+{
+  "name": "hallochat-root",
+  "private": true,
+  "workspaces": [
+    "服务端",
+    "服务端/monitor"
+  ],
+  "scripts": {
+    "start": "npm start -w hallochat-server",
+    "dev": "npm run dev -w hallochat-server"
+  }
+}

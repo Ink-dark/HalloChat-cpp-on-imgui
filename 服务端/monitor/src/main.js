@@ -18,7 +18,9 @@ const state = {
 baseUrlInput.value = state.baseUrl;
 
 const cards = [
-  { key: 'activeConnections', label: '在线连接', format: formatNumber },
+  { key: 'status', label: '服务器状态', format: (v) => v === 'ok' ? '运行中' : (v || '--') },
+  { key: 'totalUsers', label: '注册总人数', format: formatNumber },
+  { key: 'activeConnections', label: '在线用户', format: formatNumber },
   { key: 'totalConnections', label: '累计连接', format: formatNumber },
   { key: 'totalMessages', label: '累计消息', format: formatNumber },
   { key: 'messagesLastMinute', label: '1 分钟消息数', format: formatNumber },
@@ -67,6 +69,7 @@ async function refresh() {
 
     updateStatus('online');
     updateCards({
+      ...health,
       ...stats,
       ...metrics
     });

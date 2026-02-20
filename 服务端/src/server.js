@@ -9,7 +9,9 @@ const { monitorEventLoopDelay } = require('perf_hooks');
 
 const PORT = Number(process.env.PORT || 3001);
 const WS_PATH = process.env.WS_PATH || '/ws';
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:5173';
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const DEFAULT_WEB_PORT = NODE_ENV === 'production' ? 4444 : 3333;
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || `http://localhost:${DEFAULT_WEB_PORT}`;
 
 const ACCOUNT_DIR = path.join(__dirname, '..', 'Account');
 const PAK_FILENAME = 'pak.JSON';
@@ -42,6 +44,58 @@ const onlineUsers = new Map();
 
 const loopDelay = monitorEventLoopDelay({ resolution: 20 });
 loopDelay.enable();
+
+const { spawn } = require('child_process');
+let monitorProc = null;
+function startMonitorWeb() {
+  if (monitorProc) return;
+  const monitorDir = path.join(__dirname, '..', 'monitor');
+  if (!fs.existsSync(monitorDir)) return;
+  const isProd = process.env.NODE_ENV === 'production';
+  const run = (cmd, args, opts = {}) =>
+    new Promise((resolve, reject) => {
+      const p = spawn(cmd, args, { cwd: monitorDir, stdio: 'inherit', ...opts });
+      p.on('error', reject);
+      p.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} exited ${code}`))));
+    });
+  const ensureInstall = async () => {
+    if (!fs.existsSync(path.join(monitorDir, 'node_modules'))) {
+      await run('npm', ['install']);
+    }
+  };
+  const startDev = () => {
+    // Check if port 3333 is in use? No, let Vite handle it (strictPort: false)
+    // Or we could try to kill whatever is on 3333 if we really want to enforce it.
+    // For now, let's just spawn.
+    monitorProc = spawn('npm', ['run', 'dev', '--', '--port', '3333'], { cwd: monitorDir, stdio: 'inherit' });
+    monitorProc.on('close', () => {
+      monitorProc = null;
+    });
+  };
+  const startPreview = async () => {
+    await run('npm', ['run', 'build']);
+    monitorProc = spawn('npm', ['run', 'preview'], { cwd: monitorDir, stdio: 'inherit' });
+    monitorProc.on('close', () => {
+      monitorProc = null;
+    });
+  };
+  (async () => {
+    try {
+      await ensureInstall();
+      if (isProd) {
+        await startPreview();
+      } else {
+        startDev();
+      }
+    } catch {}
+  })();
+}
+
+process.on('exit', () => {
+  if (monitorProc && !monitorProc.killed) {
+    monitorProc.kill('SIGINT');
+  }
+});
 
 function ensureAccountDir() {
   if (!fs.existsSync(ACCOUNT_DIR)) {
@@ -456,12 +510,20 @@ app.get('/health', (_req, res) => {
   });
 });
 
+function getUserCount() {
+  if (!fs.existsSync(ACCOUNT_DIR)) return 0;
+  return fs.readdirSync(ACCOUNT_DIR, { withFileTypes: true })
+    .filter(entry => entry.isDirectory())
+    .length;
+}
+
 app.get('/stats', (_req, res) => {
   pruneMessages();
   res.json({
     activeConnections,
     totalConnections,
     totalMessages,
+    totalUsers: getUserCount(),
     messagesLastMinute: messageTimestamps.length,
     lastMessageAt,
     errorCount,
@@ -505,4 +567,5 @@ app.get('/', (_req, res) => {
 server.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`);
   console.log(`WebSocket path: ws://localhost:${PORT}${WS_PATH}`);
+  startMonitorWeb();
 });
