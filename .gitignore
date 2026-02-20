@@ -48,3 +48,4 @@ build/
 /服务端/group_chat.json
 /服务端/Account/**
 !/服务端/Account/.gitkeep
+.DS_Store
