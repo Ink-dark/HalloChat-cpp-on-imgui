@@ -14,7 +14,7 @@
 
 ### SANYOU （LUCA.NEX)
 - 邮箱：sanyou1@hallochat.cn
-- 个人网站:[lucanex.top](https://www.lucanex.top/)
+- 个人网站:[点击查看](https://www.lucanex.top/)
 
 
 ## 目录结构
