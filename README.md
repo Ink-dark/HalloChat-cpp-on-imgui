@@ -7,6 +7,16 @@
 
 ---
 
+## 项目开发者
+### 墨染柒DarkSeven
+- 邮箱：moranqidarkseven@hallochat.cn
+- 个人博客：[墨染柒的个人博客-GitHub Pages（可能停止更新）](Ink-dark.github.io)
+
+### SANYOU （LUCA.NEX)
+- 邮箱：sanyou1@hallochat.cn
+- 个人网站:[lucanex.top](https://www.lucanex.top/)
+
+
 ## 目录结构
 
 ```
